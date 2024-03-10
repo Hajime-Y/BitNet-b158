@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "mybitnet"
-version = "0.1.0"
+version = "0.1.3"
 authors = ["Hajime Yagihara <eitiwai@gmail.com>"]
 description = "A PyTorch implementation of BitNet, a network utilizing bit quantization for linear layers."
 readme = "README.md"
@@ -18,8 +18,8 @@ classifiers = [
 homepage = "https://note.com/hatti8/n/nc6890e79a19a"
 
 [tool.poetry.dependencies]
-python = "^3.11"
-torch = "^1.7.1"
+python = "^3.6"
+torch = "*"
 
 [[tool.poetry.packages]]
-include = "bitnet"
+include = "mybitnet"

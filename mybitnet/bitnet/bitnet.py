@@ -54,7 +54,7 @@ class BitLinear(nn.Linear):
         x_norm = self.layernorm(x)
 
         # 2. Absmax Quatization (input: x_norm, output: x_q, gamma)
-        x_q, gamma = absmax_quantize(x_norm)
+        x_q, gamma = self.absmax_quantize(x_norm)
 
         # 3. 1-bit Weights化 (input: -, output: w_q, beta)
         w_q, beta = self.quantize_weights()

@@ -8,19 +8,19 @@ class BitLinear(nn.Linear):
         self.bits = bits
         self.Qb = 2 ** (self.bits - 1)
         self.flg_before_linear = flg_before_linear
+        self.epsilon = 1e-6  # overflow防止のための小さな値
 
     def absmax_quantize(self, x):
-        epsilon = 1e-6  # overflow防止のための小さな値
         if self.flg_before_linear:
             # パターン①：　通常は[-Qb, Qb]にスケール: 式(4), (5)を適用
-            gamma = torch.abs(x).max() + epsilon
-            x_scaled = torch.clamp(x * self.Qb / gamma, -self.Qb + epsilon, self.Qb - epsilon)
+            gamma = torch.abs(x).max() + self.epsilon
+            x_scaled = torch.clamp(x * self.Qb / gamma, -self.Qb + self.epsilon, self.Qb - self.epsilon)
         else:
             # パターン②：　Reluなどの非線形関数前の場合は[0, Qb]にスケール：　式(6)を適用
             # 論文中には記載はないですが、スケールが異なるためスケーリングの基準として使っているgammaもetaを反映した値にすべきだと考えます。
             eta = x.min()
-            gamma = torch.abs(x - eta).max() + epsilon
-            x_scaled = torch.clamp((x - eta) * self.Qb / gamma, epsilon, self.Qb - epsilon)
+            gamma = torch.abs(x - eta).max() + self.epsilon
+            x_scaled = torch.clamp((x - eta) * self.Qb / gamma, self.epsilon, self.Qb - self.epsilon)
         # 論文中の式(4), (5), (6)には記載はないですが、量子化の実施
         x_q = torch.round(x_scaled)
         # STE
@@ -33,8 +33,6 @@ class BitLinear(nn.Linear):
         return (x > 0).to(torch.int8) * 2 - 1
 
     def quantize_weights(self):
-        epsilon = 1e-6  # overflow防止のための小さな値
-
         # 式(3): alphaの計算
         alpha = self.weight.mean()
 
@@ -45,9 +43,8 @@ class BitLinear(nn.Linear):
         # 式(12): betaの計算
         beta = self.weight.abs().mean()
 
-        # STE (weight_binarizedとスケールを合わせるためweight_centered　/ betaとしています。)
-        # weight_centered = weight_centered / beta
-        weight_scaled = weight_centered / (weight_centered.abs().max() + epsilon)
+        # STE (weight_binarizedとスケールを合わせるためweight_centeredをweight_scaledにスケールしています。)
+        weight_scaled = weight_centered / (weight_centered.abs().max() + self.epsilon)
         weight_binarized = (weight_binarized - weight_scaled).detach() + weight_scaled
 
         return weight_binarized, beta

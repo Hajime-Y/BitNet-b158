@@ -33,6 +33,8 @@ class BitLinear(nn.Linear):
         return (x > 0).to(torch.int8) * 2 - 1
 
     def quantize_weights(self):
+        epsilon = 1e-6  # overflow防止のための小さな値
+
         # 式(3): alphaの計算
         alpha = self.weight.mean()
 
@@ -44,8 +46,9 @@ class BitLinear(nn.Linear):
         beta = self.weight.abs().mean()
 
         # STE (weight_binarizedとスケールを合わせるためweight_centered　/ betaとしています。)
-        weight_centered = weight_centered / beta
-        weight_binarized = (weight_binarized - weight_centered).detach() + weight_centered
+        # weight_centered = weight_centered / beta
+        weight_scaled = weight_centered / (weight_centered.abs().max() + epsilon)
+        weight_binarized = (weight_binarized - weight_scaled).detach() + weight_scaled
 
         return weight_binarized, beta
         

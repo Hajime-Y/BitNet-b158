@@ -1,0 +1,25 @@
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "mybitnet"
+version = "0.1.0"
+authors = ["Hajime Yagihara <eitiwai@gmail.com>"]
+description = "A PyTorch implementation of BitNet, a network utilizing bit quantization for linear layers."
+readme = "README.md"
+license = "Apache-2.0"
+keywords = ["pytorch", "bit quantization", "neural networks", "llm", "pretrain"]
+classifiers = [
+    "Environment :: GPU",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+]
+homepage = "https://note.com/hatti8/n/nc6890e79a19a"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+torch = "^1.7.1"
+
+[[tool.poetry.packages]]
+include = "bitnet"

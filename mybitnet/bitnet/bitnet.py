@@ -22,11 +22,10 @@ class BitLinear(nn.Linear):
             gamma = torch.abs(x - eta).max() + epsilon
             x_scaled = torch.clamp((x - eta) * self.Qb / gamma, epsilon, self.Qb - epsilon)
         # 論文中の式(4), (5), (6)には記載はないですが、量子化の実施
-        # x_q = torch.round(x_scaled)
+        x_q = torch.round(x_scaled)
         # STE
-        # x_q = (x_q - x_scaled).detach() + x_scaled
-        # return x_q, gamma
-        return x_scaled, gamma
+        x_q = (x_q - x_scaled).detach() + x_scaled
+        return x_q, gamma
         
     # 独自のsign関数の定義
     # torch.signは0を0として扱ってしまう。custom_signはW>0を+1に、W≦0を-1とする。

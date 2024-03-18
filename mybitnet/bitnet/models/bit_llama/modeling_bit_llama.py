@@ -63,8 +63,6 @@ class BitLlamaDecoderLayer(LlamaDecoderLayer):
         self.mlp = BitLlamaMLP(config)
 
 class BitLlamaModel(LlamaModel):
-    config_class = BitLlamaConfig
-    
     def __init__(self, config: BitLlamaConfig):
         super().__init__(config)
         self.layers = nn.ModuleList(

@@ -1,4 +1,5 @@
-from typing import Optional
+import warnings
+from typing import Optional, Tuple
 from transformers.models.llama.modeling_llama import (
     LlamaConfig, 
     LlamaModel,
@@ -10,6 +11,7 @@ from transformers.models.llama.modeling_llama import (
     LlamaDecoderLayer,
 )
 from mybitnet.bitnet import BitLinear
+import torch
 from torch import nn
 
 class BitLlamaConfig(LlamaConfig):
@@ -61,8 +63,61 @@ class BitLlamaDecoderLayer(LlamaDecoderLayer):
         super().__init__(config, layer_idx)
         self.self_attn = BITLLAMA_ATTENTION_CLASSES[config._attn_implementation](config=config, layer_idx=layer_idx)
         self.mlp = BitLlamaMLP(config)
+        del self.input_layernorm
+        del self.post_attention_layernorm
+
+    def forward(
+        self,
+        hidden_states: torch.Tensor,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_value: Optional[Tuple[torch.Tensor]] = None,
+        output_attentions: Optional[bool] = False,
+        use_cache: Optional[bool] = False,
+        cache_position: Optional[torch.LongTensor] = None,
+        **kwargs,
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
+        """
+        refers: https://github.com/huggingface/transformers/blob/c5f0288bc7d76f65996586f79f69fba8867a0e67/src/transformers/models/llama/modeling_llama.py#L693
+        """
+        if "padding_mask" in kwargs:
+            warnings.warn(
+                "Passing `padding_mask` is deprecated and will be removed in v4.37. Please make sure use `attention_mask` instead.`"
+            )
+
+        residual = hidden_states
+
+        # Self Attention
+        hidden_states, self_attn_weights, present_key_value = self.self_attn(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_value=past_key_value,
+            output_attentions=output_attentions,
+            use_cache=use_cache,
+            cache_position=cache_position,
+            **kwargs,
+        )
+        hidden_states = residual + hidden_states
+
+        # Fully Connected
+        residual = hidden_states
+        hidden_states = self.mlp(hidden_states)
+        hidden_states = residual + hidden_states
+
+        outputs = (hidden_states,)
+
+        if output_attentions:
+            outputs += (self_attn_weights,)
+
+        if use_cache:
+            outputs += (present_key_value,)
+
+        return outputs
 
 class BitLlamaModel(LlamaModel):
+    config_class = BitLlamaConfig
+
     def __init__(self, config: BitLlamaConfig):
         super().__init__(config)
         self.layers = nn.ModuleList(

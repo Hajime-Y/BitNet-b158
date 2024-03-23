@@ -24,9 +24,9 @@ class BitLlamaConfig(LlamaConfig):
 class BitLlamaMLP(LlamaMLP):
     def __init__(self, config):
         super().__init__(config)
-        self.gate_proj = BitLinear(self.hidden_size, self.intermediate_size, bias=False, bits=config.bits, flg_before_linear=True)
+        self.gate_proj = BitLinear(self.hidden_size, self.intermediate_size, bias=False, bits=config.bits, flg_before_linear=False)
         self.up_proj = BitLinear(self.hidden_size, self.intermediate_size, bias=False, bits=config.bits, flg_before_linear=True)
-        self.down_proj = BitLinear(self.intermediate_size, self.hidden_size, bias=False, bits=config.bits, flg_before_linear=False)
+        self.down_proj = BitLinear(self.intermediate_size, self.hidden_size, bias=False, bits=config.bits, flg_before_linear=True)
         
 class BitLlamaAttention(LlamaAttention):
     def __init__(self, config: BitLlamaConfig, layer_idx: Optional[int] = None):

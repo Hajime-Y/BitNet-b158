@@ -87,3 +87,41 @@ class BitLinear(nn.Linear):
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, flg_before_linear={self.flg_before_linear}'
+
+
+class BitLinear158b(BitLinear):
+    def __init__(self, in_features, out_features, bias=True, bits=8):
+        super().__init__(in_features, out_features, bias, bits)
+        # 2. BitLinear b158では、[0, Qb]のスケーリングは行わないため、flg_before_linearは使用しません。
+        del self.flg_before_linear
+        
+    # 1. quantize_weightsを{-1, 1}の2値化から{-1, 0, 1}の3値化に修正
+    def quantize_weights(self):
+        # 式(3): betaの計算
+        beta = self.weight.abs().mean() + self.epsilon
+
+        # 式(1),(2): 重みの量子化(-1, 0, 1)とクリップ
+        # 各値は{-1, 0, +1}の中で最も近い整数に丸められます。
+        weight_scaled = self.weight / beta
+        weight_trinarized = torch.round(weight_scaled)
+        weight_trinarized = torch.clamp(weight_trinarized, -1, 1)
+
+        # STE
+        weight_trinarized = (weight_trinarized - weight_scaled).detach() + weight_scaled
+
+        return weight_trinarized, beta
+    
+    # 2. BitLinear b158では、[0, Qb]のスケーリングは行わないません。
+    def absmax_quantize(self, x):
+        # スケールgammaの計算（absmax quantization）
+        gamma = torch.abs(x).max() + self.epsilon
+
+        # 重みの量子化とクリップ
+        x_scaled = x * self.Qb / gamma
+        x_q = torch.clamp(x_scaled, -self.Qb + self.epsilon, self.Qb - self.epsilon)
+        x_q = torch.round(x_q)
+        
+        # STE
+        x_q = (x_q - x_scaled).detach() + x_scaled
+        
+        return x_q, gamma

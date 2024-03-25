@@ -91,7 +91,7 @@ class BitLinear(nn.Linear):
 
 class BitLinear158b(BitLinear):
     def __init__(self, in_features, out_features, bias=True, rms_norm_eps=1e-6, bits=8):
-        super().__init__(in_features, out_features, bias, bits)
+        super().__init__(in_features, out_features, bias, rms_norm_eps, bits)
         # 2. BitLinear b158では、[0, Qb]のスケーリングは行わないため、flg_before_linearは使用しません。
         del self.flg_before_linear
         

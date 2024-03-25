@@ -118,10 +118,13 @@ class BitLinear158b(BitLinear):
 
         # 重みの量子化とクリップ
         x_scaled = x * self.Qb / gamma
-        x_q = torch.round(x_q)
-        x_q = torch.clamp(x_scaled, -self.Qb, self.Qb - 1)
+        x_q = torch.round(x_scaled)
+        x_q = torch.clamp(x_q, -self.Qb, self.Qb - 1)
         
         # STE
         x_q = (x_q - x_scaled).detach() + x_scaled
         
         return x_q, gamma
+    
+    def extra_repr(self) -> str:
+        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}'

@@ -19,11 +19,11 @@ class BitLlamaConfig(LlamaConfig):
 
     def __init__(self, bitnet_type="1.58b", bits=8, **kwargs):
         super().__init__(**kwargs)
-        self.bits = bits
+        self.bitnet_type = bitnet_type
         if self.bitnet_type not in ["1.58b", "1b"]:
             raise ValueError("bitnet_type must be either '1.58b' or '1b'.")
-        else:
-            self.bitnet_type = bitnet_type
+        self.bits = bits
+
 
 class BitLlamaMLP(LlamaMLP):
     def __init__(self, config):

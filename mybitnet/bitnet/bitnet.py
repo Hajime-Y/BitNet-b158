@@ -62,7 +62,7 @@ class BitLinear(nn.Linear):
         beta = self.weight.abs().mean()
 
         # STE (weight_binarizedとスケールを合わせるためweight_centeredをweight_scaledにスケールしています。)
-        weight_scaled = weight_centered / (weight_centered.abs().max() + self.epsilon)
+        weight_scaled = weight_centered / (weight_centered.abs().max().clamp(min=self.epsilon))
         weight_binarized = (weight_binarized - weight_scaled).detach() + weight_scaled
 
         return weight_binarized, beta
@@ -98,7 +98,7 @@ class BitLinear158b(BitLinear):
     # 1. quantize_weightsを{-1, 1}の2値化から{-1, 0, 1}の3値化に修正
     def quantize_weights(self):
         # 式(3): betaの計算
-        beta = self.weight.abs().mean() + self.epsilon
+        beta = self.weight.abs().mean().clamp(min=self.epsilon)
 
         # 式(1),(2): 重みの量子化(-1, 0, 1)とクリップ
         # 各値は{-1, 0, +1}の中で最も近い整数に丸められます。

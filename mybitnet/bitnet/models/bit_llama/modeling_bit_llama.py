@@ -10,47 +10,82 @@ from transformers.models.llama.modeling_llama import (
     LlamaMLP,
     LlamaDecoderLayer,
 )
-from mybitnet.bitnet import BitLinear
+from mybitnet.bitnet import BitLinear, BitLinear158b
 import torch
 from torch import nn
 
 class BitLlamaConfig(LlamaConfig):
     model_type = "bit_llama"
 
-    def __init__(self, bits=8, **kwargs):
+    def __init__(self, bitnet_type="1.58b", bits=8, **kwargs):
         super().__init__(**kwargs)
         self.bits = bits
+        if self.bitnet_type not in ["1.58b", "1b"]:
+            raise ValueError("bitnet_type must be either '1.58b' or '1b'.")
+        else:
+            self.bitnet_type = bitnet_type
 
 class BitLlamaMLP(LlamaMLP):
     def __init__(self, config):
         super().__init__(config)
-        self.gate_proj = BitLinear(self.hidden_size, self.intermediate_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=False)
-        self.up_proj = BitLinear(self.hidden_size, self.intermediate_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.down_proj = BitLinear(self.intermediate_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        if config.bitnet_type=="1b":
+            self.gate_proj = BitLinear(self.hidden_size, self.intermediate_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=False)
+            self.up_proj = BitLinear(self.hidden_size, self.intermediate_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.down_proj = BitLinear(self.intermediate_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        elif config.bitnet_type=="1.58b":
+            self.gate_proj = BitLinear158b(self.hidden_size, self.intermediate_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.up_proj = BitLinear158b(self.hidden_size, self.intermediate_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.down_proj = BitLinear158b(self.intermediate_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+        else:
+            raise ValueError("bitnet_type must be either '1.58b' or '1b'.")
         
 class BitLlamaAttention(LlamaAttention):
     def __init__(self, config: BitLlamaConfig, layer_idx: Optional[int] = None):
         super().__init__(config)
-        self.q_proj = BitLinear(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.k_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.v_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.o_proj = BitLinear(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        if config.bitnet_type=="1b":
+            self.q_proj = BitLinear(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.k_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.v_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.o_proj = BitLinear(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        elif config.bitnet_type=="1.58b":
+            self.q_proj = BitLinear158b(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.k_proj = BitLinear158b(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.v_proj = BitLinear158b(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.o_proj = BitLinear158b(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+        else:
+            raise ValueError("bitnet_type must be either '1.58b' or '1b'.")
 
 class BitLlamaFlashAttention2(LlamaFlashAttention2):
     def __init__(self, config: BitLlamaConfig, layer_idx: Optional[int] = None):
         super().__init__(config, layer_idx)
-        self.q_proj = BitLinear(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.k_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.v_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.o_proj = BitLinear(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        if config.bitnet_type=="1b":
+            self.q_proj = BitLinear(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.k_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.v_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.o_proj = BitLinear(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        elif config.bitnet_type=="1.58b":
+            self.q_proj = BitLinear158b(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.k_proj = BitLinear158b(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.v_proj = BitLinear158b(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.o_proj = BitLinear158b(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+        else:
+            raise ValueError("bitnet_type must be either '1.58b' or '1b'.")
 
 class BitLlamaSdpaAttention(LlamaSdpaAttention):
     def __init__(self, config: BitLlamaConfig, layer_idx: Optional[int] = None):
         super().__init__(config, layer_idx)
-        self.q_proj = BitLinear(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.k_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.v_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
-        self.o_proj = BitLinear(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        if config.bitnet_type=="1b":
+            self.q_proj = BitLinear(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.k_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.v_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+            self.o_proj = BitLinear(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
+        elif config.bitnet_type=="1.58b":
+            self.q_proj = BitLinear158b(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.k_proj = BitLinear158b(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.v_proj = BitLinear158b(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+            self.o_proj = BitLinear158b(self.hidden_size, self.hidden_size, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits)
+        else:
+            raise ValueError("bitnet_type must be either '1.58b' or '1b'.")
 
 BITLLAMA_ATTENTION_CLASSES = {
     "eager": BitLlamaAttention,

@@ -31,16 +31,16 @@ class BitLinear(nn.Linear):
     def absmax_quantize(self, x):
         if self.flg_before_linear:
             # パターン①：　通常は[-Qb, Qb]にスケール: 式(4), (5)を適用
-            gamma = torch.abs(x).max() + self.epsilon
-            x_scaled = torch.clamp(x * self.Qb / gamma, -self.Qb + self.epsilon, self.Qb - self.epsilon)
+            gamma = torch.abs(x).max().clamp(min=self.epsilon)
+            x_scaled = x * self.Qb / gamma
+            x_q = torch.round(x_scaled).clamp(-self.Qb, self.Qb - 1)
         else:
             # パターン②：　Reluなどの非線形関数前の場合は[0, Qb]にスケール：　式(6)を適用
             # 論文中には記載はないですが、スケールが異なるためスケーリングの基準として使っているgammaもetaを反映した値にすべきだと考えます。
             eta = x.min()
-            gamma = torch.abs(x - eta).max() + self.epsilon
-            x_scaled = torch.clamp((x - eta) * self.Qb / gamma, self.epsilon, self.Qb - self.epsilon)
-        # 論文中の式(4), (5), (6)には記載はないですが、量子化の実施
-        x_q = torch.round(x_scaled)
+            gamma = torch.abs(x - eta).max().clamp(min=self.epsilon)
+            x_scaled = (x - eta) * self.Qb / gamma
+            x_q = torch.round(x_scaled).clamp(0, self.Qb - 1)
         # STE
         x_q = (x_q - x_scaled).detach() + x_scaled
         return x_q, gamma
@@ -114,12 +114,12 @@ class BitLinear158b(BitLinear):
     # 2. BitLinear b158では、[0, Qb]のスケーリングは行わないません。
     def absmax_quantize(self, x):
         # スケールgammaの計算（absmax quantization）
-        gamma = torch.abs(x).max() + self.epsilon
+        gamma = torch.abs(x).max().clamp(min=self.epsilon)
 
         # 重みの量子化とクリップ
         x_scaled = x * self.Qb / gamma
-        x_q = torch.clamp(x_scaled, -self.Qb + self.epsilon, self.Qb - self.epsilon)
         x_q = torch.round(x_q)
+        x_q = torch.clamp(x_scaled, -self.Qb, self.Qb - 1)
         
         # STE
         x_q = (x_q - x_scaled).detach() + x_scaled

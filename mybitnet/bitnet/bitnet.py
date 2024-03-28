@@ -97,17 +97,21 @@ class BitLinear158b(BitLinear):
         
     # 1. quantize_weightsを{-1, 1}の2値化から{-1, 0, 1}の3値化に修正
     def quantize_weights(self):
+        weight = self.weight
         # 式(3): betaの計算
-        beta = self.weight.abs().mean().clamp(min=self.epsilon)
+        beta = weight.abs().mean().clamp(min=self.epsilon)
 
         # 式(1),(2): 重みの量子化(-1, 0, 1)とクリップ
         # 各値は{-1, 0, +1}の中で最も近い整数に丸められます。
-        weight_scaled = self.weight / beta
+        weight_scaled = weight / beta
         weight_trinarized = torch.round(weight_scaled)
         weight_trinarized = torch.clamp(weight_trinarized, -1, 1)
 
         # STE
-        weight_trinarized = (weight_trinarized - weight_scaled).detach() + weight_scaled
+        # weight_trinarized = (weight_trinarized - weight_scaled).detach() + weight_scaled  # 0.5.4
+        weight_trinarized = (weight_trinarized - weight).detach() + weight  # 0.5.5
+        # weight_scaled = self.weight / self.weight.abs().max().clamp(min=self.epsilon)  # 0.5.6
+        # weight_trinarized = (weight_trinarized - weight_scaled).detach() + weight_scaled  # 0.5.6
 
         return weight_trinarized, beta
     
@@ -117,12 +121,12 @@ class BitLinear158b(BitLinear):
         gamma = torch.abs(x).max().clamp(min=self.epsilon)
 
         # 重みの量子化とクリップ
-        x_scaled = x * self.Qb / gamma
-        x_q = torch.round(x_scaled)
+        x_q = x * self.Qb / gamma
+        x_q = torch.round(x_q)
         x_q = torch.clamp(x_q, -self.Qb, self.Qb - 1)
         
         # STE
-        x_q = (x_q - x_scaled).detach() + x_scaled
+        x_q = (x_q - x).detach() + x
         
         return x_q, gamma
     

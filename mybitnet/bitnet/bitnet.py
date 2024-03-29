@@ -69,21 +69,21 @@ class BitLinear(nn.Linear):
         
     def forward(self, x):
         # 1. LayerNorm (input: x, output: x_norm)
-        x_norm = self.layernorm(x)
+        x = self.layernorm(x)
 
         # 2. Absmax Quatization (input: x_norm, output: x_q, gamma)
-        x_q, gamma = self.absmax_quantize(x_norm)
+        x, gamma = self.absmax_quantize(x)
 
         # 3. 1-bit Weights化 (input: -, output: w_q, beta)
         w_q, beta = self.quantize_weights()
 
         # 4. テンソル積(⊗) (input: x_q,w_q, output: x_matmul)
-        x_matmul = torch.nn.functional.linear(x_q, w_q, self.bias)
+        x = torch.nn.functional.linear(x, w_q, self.bias)
 
         # 5. Dequantization (input: x_matmul,beta,gamma, output: output)
-        output = x_matmul * (beta * gamma / self.Qb)
+        x = x * (beta * gamma / self.Qb)
         
-        return output
+        return x
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, flg_before_linear={self.flg_before_linear}'
@@ -109,7 +109,7 @@ class BitLinear158b(BitLinear):
 
         # STE
         # weight_trinarized = (weight_trinarized - weight_scaled).detach() + weight_scaled  # 0.5.4
-        weight_trinarized = (weight_trinarized - weight).detach() + weight  # 0.5.5
+        weight_trinarized = (weight_trinarized - weight).detach() + weight  # 0.5.5, 0.5.7, 0.5.8
         # weight_scaled = self.weight / self.weight.abs().max().clamp(min=self.epsilon)  # 0.5.6
         # weight_trinarized = (weight_trinarized - weight_scaled).detach() + weight_scaled  # 0.5.6
 
@@ -117,16 +117,17 @@ class BitLinear158b(BitLinear):
     
     # 2. BitLinear b158では、[0, Qb]のスケーリングは行わないません。
     def absmax_quantize(self, x):
+        Qb = self.Qb
         # スケールgammaの計算（absmax quantization）
         gamma = torch.abs(x).max().clamp(min=self.epsilon)
 
         # 重みの量子化とクリップ
-        x_q = x * self.Qb / gamma
-        x_q = torch.round(x_q)
-        x_q = torch.clamp(x_q, -self.Qb, self.Qb - 1)
+        x_scaled = x * Qb / gamma
+        x_q = torch.round(x_scaled)
+        x_q = torch.clamp(x_q, -Qb, Qb - 1)
         
         # STE
-        x_q = (x_q - x).detach() + x
+        x_q = (x_q - x_scaled).detach() + x_scaled
         
         return x_q, gamma
     

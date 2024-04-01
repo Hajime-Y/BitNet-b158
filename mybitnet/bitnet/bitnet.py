@@ -50,16 +50,16 @@ class BitLinear(nn.Linear):
     def custom_sign(self, x):
         return (x > 0).to(torch.int8) * 2 - 1
 
-    def quantize_weights(self):
+    def quantize_weights(self, weight):
         # 式(3): alphaの計算
-        alpha = self.weight.mean()
+        alpha = weight.mean()
 
         # 式(1),(2): 重みの中心化とバイナリ化
-        weight_centered = self.weight - alpha
+        weight_centered = weight - alpha
         weight_binarized = self.custom_sign(weight_centered)
 
         # 式(12): betaの計算
-        beta = self.weight.abs().mean()
+        beta = weight.abs().mean()
 
         # STE (weight_binarizedとスケールを合わせるためweight_centeredをweight_scaledにスケールしています。)
         weight_scaled = weight_centered / (weight_centered.abs().max().clamp(min=self.epsilon))
@@ -75,7 +75,7 @@ class BitLinear(nn.Linear):
         x_q, gamma = self.absmax_quantize(x_norm)
 
         # 3. 1-bit Weights化 (input: -, output: w_q, beta)
-        w_q, beta = self.quantize_weights()
+        w_q, beta = self.quantize_weights(self.weight)
 
         # 4. テンソル積(⊗) (input: x_q,w_q, output: x_matmul)
         x_matmul = torch.nn.functional.linear(x_q, w_q, self.bias)
@@ -96,18 +96,18 @@ class BitLinear158b(BitLinear):
         del self.flg_before_linear
         
     # 1. quantize_weightsを{-1, 1}の2値化から{-1, 0, 1}の3値化に修正
-    def quantize_weights(self):
+    def quantize_weights(self, weight):
         # 式(3): betaの計算
-        beta = self.weight.abs().mean().clamp(min=self.epsilon)
+        beta = weight.abs().mean().clamp(min=self.epsilon)
 
         # 式(1),(2): 重みの量子化(-1, 0, 1)とクリップ
         # 各値は{-1, 0, +1}の中で最も近い整数に丸められます。
-        weight_trinarized = self.weight / beta
+        weight_trinarized = weight / beta
         weight_trinarized = torch.round(weight_trinarized)
         weight_trinarized = torch.clamp(weight_trinarized, -1, 1)
 
         # STE
-        weight_trinarized = (weight_trinarized - self.weight).detach() + self.weight
+        weight_trinarized = (weight_trinarized - weight).detach() + weight
 
         return weight_trinarized, beta
     

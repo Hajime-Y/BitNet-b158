@@ -50,7 +50,7 @@ class BitLinear(nn.Linear):
     def custom_sign(self, x):
         return (x > 0).to(torch.int8) * 2 - 1
 
-    def quantize_weights(self, weight):
+    def quantize_weights(self, weight, epsilon):
         # 式(3): alphaの計算
         alpha = weight.mean()
 
@@ -62,7 +62,7 @@ class BitLinear(nn.Linear):
         beta = weight.abs().mean()
 
         # STE (weight_binarizedとスケールを合わせるためweight_centeredをweight_scaledにスケールしています。)
-        weight_scaled = weight_centered / (weight_centered.abs().max().clamp(min=self.epsilon))
+        weight_scaled = weight_centered / (weight_centered.abs().max().clamp(min=epsilon))
         weight_binarized = (weight_binarized - weight_scaled).detach() + weight_scaled
 
         return weight_binarized, beta
@@ -75,7 +75,7 @@ class BitLinear(nn.Linear):
         x_q, gamma = self.absmax_quantize(x_norm)
 
         # 3. 1-bit Weights化 (input: -, output: w_q, beta)
-        w_q, beta = self.quantize_weights(self.weight)
+        w_q, beta = self.quantize_weights(self.weight, self.epsilon)
 
         # 4. テンソル積(⊗) (input: x_q,w_q, output: x_matmul)
         x_matmul = torch.nn.functional.linear(x_q, w_q, self.bias)
@@ -96,9 +96,10 @@ class BitLinear158b(BitLinear):
         del self.flg_before_linear
         
     # 1. quantize_weightsを{-1, 1}の2値化から{-1, 0, 1}の3値化に修正
-    def quantize_weights(self, weight):
+    @torch.jit.script
+    def quantize_weights(self, weight, epsilon):
         # 式(3): betaの計算
-        beta = weight.abs().mean().clamp(min=self.epsilon)
+        beta = weight.abs().mean().clamp(min=epsilon)
 
         # 式(1),(2): 重みの量子化(-1, 0, 1)とクリップ
         # 各値は{-1, 0, +1}の中で最も近い整数に丸められます。

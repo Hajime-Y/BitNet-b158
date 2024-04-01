@@ -29,8 +29,8 @@ class BitLinear(nn.Linear):
         self.flg_before_linear = flg_before_linear
         self.epsilon = 1e-6  # overflow防止のための小さな値
 
-    def absmax_quantize(self, x: torch.Tensor, Qb: int, epsilon: float, flg_before_linear: bool) -> Tuple[torch.Tensor, float]:
-        if flg_before_linear:
+    def absmax_quantize(self, x: torch.Tensor, Qb: int, epsilon: float) -> Tuple[torch.Tensor, float]:
+        if self.flg_before_linear:
             # パターン①：　通常は[-Qb, Qb]にスケール: 式(4), (5)を適用
             gamma = torch.abs(x).max().clamp(min=epsilon)
             x_scaled = x * Qb / gamma
@@ -73,7 +73,7 @@ class BitLinear(nn.Linear):
         x_norm = self.layernorm(x)
 
         # 2. Absmax Quatization (input: x_norm, output: x_q, gamma)
-        x_q, gamma = self.absmax_quantize(x_norm, self.Qb, self.epsilon, self.flg_before_linear)
+        x_q, gamma = self.absmax_quantize(x_norm, self.Qb, self.epsilon)
 
         # 3. 1-bit Weights化 (input: -, output: w_q, beta)
         w_q, beta = self.quantize_weights(self.weight, self.epsilon)

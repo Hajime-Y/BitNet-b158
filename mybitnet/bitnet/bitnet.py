@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+from typing import Tuple
 
 class BitRMSNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
@@ -28,19 +29,19 @@ class BitLinear(nn.Linear):
         self.flg_before_linear = flg_before_linear
         self.epsilon = 1e-6  # overflow防止のための小さな値
 
-    def absmax_quantize(self, x):
-        if self.flg_before_linear:
+    def absmax_quantize(self, x: torch.Tensor, Qb: int, epsilon: float, flg_before_linear: bool) -> Tuple[torch.Tensor, float]:
+        if flg_before_linear:
             # パターン①：　通常は[-Qb, Qb]にスケール: 式(4), (5)を適用
-            gamma = torch.abs(x).max().clamp(min=self.epsilon)
-            x_scaled = x * self.Qb / gamma
-            x_q = torch.round(x_scaled).clamp(-self.Qb, self.Qb - 1)
+            gamma = torch.abs(x).max().clamp(min=epsilon)
+            x_scaled = x * Qb / gamma
+            x_q = torch.round(x_scaled).clamp(-Qb, Qb - 1)
         else:
             # パターン②：　Reluなどの非線形関数前の場合は[0, Qb]にスケール：　式(6)を適用
             # 論文中には記載はないですが、スケールが異なるためスケーリングの基準として使っているgammaもetaを反映した値にすべきだと考えます。
             eta = x.min()
-            gamma = torch.abs(x - eta).max().clamp(min=self.epsilon)
-            x_scaled = (x - eta) * self.Qb / gamma
-            x_q = torch.round(x_scaled).clamp(0, self.Qb - 1)
+            gamma = torch.abs(x - eta).max().clamp(min=epsilon)
+            x_scaled = (x - eta) * Qb / gamma
+            x_q = torch.round(x_scaled).clamp(0, Qb - 1)
         # STE
         x_q = (x_q - x_scaled).detach() + x_scaled
         return x_q, gamma
@@ -50,7 +51,7 @@ class BitLinear(nn.Linear):
     def custom_sign(self, x):
         return (x > 0).to(torch.int8) * 2 - 1
 
-    def quantize_weights(self, weight, epsilon):
+    def quantize_weights(self, weight: torch.Tensor, epsilon: float) -> Tuple[torch.Tensor, float]:
         # 式(3): alphaの計算
         alpha = weight.mean()
 
@@ -72,7 +73,7 @@ class BitLinear(nn.Linear):
         x_norm = self.layernorm(x)
 
         # 2. Absmax Quatization (input: x_norm, output: x_q, gamma)
-        x_q, gamma = self.absmax_quantize(x_norm)
+        x_q, gamma = self.absmax_quantize(x_norm, self.Qb, self.epsilon, self.flg_before_linear)
 
         # 3. 1-bit Weights化 (input: -, output: w_q, beta)
         w_q, beta = self.quantize_weights(self.weight, self.epsilon)
@@ -96,8 +97,7 @@ class BitLinear158b(BitLinear):
         del self.flg_before_linear
         
     # 1. quantize_weightsを{-1, 1}の2値化から{-1, 0, 1}の3値化に修正
-    @torch.jit.script
-    def quantize_weights(self, weight, epsilon):
+    def quantize_weights(self, weight: torch.Tensor, epsilon: float) -> Tuple[torch.Tensor, float]:
         # 式(3): betaの計算
         beta = weight.abs().mean().clamp(min=epsilon)
 
@@ -113,14 +113,14 @@ class BitLinear158b(BitLinear):
         return weight_trinarized, beta
     
     # 2. BitLinear b158では、[0, Qb]のスケーリングは行わないません。
-    def absmax_quantize(self, x):
+    def absmax_quantize(self, x: torch.Tensor, Qb: int, epsilon: float) -> Tuple[torch.Tensor, float]:
         # スケールgammaの計算（absmax quantization）
-        gamma = torch.abs(x).max().clamp(min=self.epsilon)
+        gamma = torch.abs(x).max().clamp(min=epsilon)
 
         # 重みの量子化とクリップ
-        x_scaled = x * self.Qb / gamma
+        x_scaled = x * Qb / gamma
         x_q = torch.round(x_scaled)
-        x_q = torch.clamp(x_q, -self.Qb, self.Qb - 1)
+        x_q = torch.clamp(x_q, -Qb, Qb - 1)
         
         # STE
         x_q = (x_q - x_scaled).detach() + x_scaled

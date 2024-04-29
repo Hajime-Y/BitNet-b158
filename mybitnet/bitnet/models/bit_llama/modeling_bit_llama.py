@@ -41,7 +41,7 @@ class BitLlamaMLP(LlamaMLP):
         
 class BitLlamaAttention(LlamaAttention):
     def __init__(self, config: BitLlamaConfig, layer_idx: Optional[int] = None):
-        super().__init__(config)
+        super().__init__(config, layer_idx)  # Set `layer_idx` to avoid `self.layer_idx` to be `None`
         if config.bitnet_type=="1b":
             self.q_proj = BitLinear(self.hidden_size, self.num_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
             self.k_proj = BitLinear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=False, rms_norm_eps=config.rms_norm_eps, bits=config.bits, flg_before_linear=True)
